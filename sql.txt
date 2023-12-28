@@ -1,0 +1,382 @@
+use vena_stage
+go
+
+create table #main(
+id int,
+status varchar(99))
+
+insert into #main values (1,'in'),(1,'out'),(2,'in'),(3,'in');
+
+---- There is id of doctors in an hospital and status of them that they are in the hospital or out of the hospital
+---- We need to find out how many doctors we have inside the hospital
+
+select * from #main
+
+select x.id  from
+ (select id,count(*) as 'total_number_x' from #main 
+where status = 'in'
+group by id) as x 
+left outer join
+(select id,count(*) as 'total_number_y' from #main 
+where status = 'out'
+group by id) as y
+on x.id = y.id 
+where x.total_number_x - isnull(y.total_number_y,0) = 0 
+
+create table #game 
+(gold varchar(99),silver varchar(99),
+bronze varchar(99))
+
+insert into #game values ('harshita','tom','jerry'),
+('suraj','tom','jerry'),
+('tom','jerry','doreamon'),
+('jerry','tom','doreamon')
+
+---- This is the list of players and their medals
+---- We need to find out those players who won gold medal only , no silver medal and no bronze medal won by them.
+
+select * from #game
+
+select gold,count(*) from #game where gold not in (select distinct silver from #game
+union all 
+select distinct bronze from #game ) 
+group by gold 
+
+---- Three are some fruits which are bought by the customer in the product column ,
+---- We need to found out how many fruits we sold in descending order.
+
+create table #shop  (
+user_id int, product varchar(99))
+
+insert into #shop values (1,'mango,apple,grapes'),(2,'banana,apple'),(3,'guvava,apple,mango'),(4,'ornage,mango')
+
+select * from #shop
+
+select * from  string_split((select product from #shop ) ,',') 
+
+select * from #shop 
+cross apply
+string_split(product ,',') 
+
+select value as fruit,count(*) as total_buy  from #shop 
+cross apply
+string_split(product ,',') 
+group by value order by 2 desc
+
+---- Employees who work in same dep and have same salary
+
+create table #com (
+e_id int , salary int, d_id int)
+
+insert into #com values (1,1000,101),(2,2000,102),(3,1000,101),(4,3000,102),(5,2000,102)
+
+select * from #com
+
+select e_id,salary,d_id from (
+select * , rank() over (partition by d_id order by salary asc) as rank from #com) x
+where rank = 1
+
+select c1.e_id,c1.salary,c1.d_id from #com c1
+inner join #com c2 on c1.d_id = c2.d_id and c1.salary = c2.salary and c1.e_id <> c2.e_id
+
+create table #new (
+id int , number int)
+
+insert into #new values (1,100),(2,103),(3,20),(4,200),(5,300),(6,101)
+
+SELECT * FROM #NEW
+
+select *,Lead(number,1,0) over (order by id) from #new
+
+select *,Lead(number,1) over (order by id) from #new
+where number > 100
+
+---
+with cte as(
+select * , FIRST_VALUE(e_id) over (partition by d_id order by salary desc) as highest_salary from 
+#com )
+select * from cte where e_id = highest_salary
+
+---- range between unbounded preceding and current row
+---- range between 2 preceding and 2 following
+
+with cte as(
+select * , last_value(e_id) over (partition by d_id order by salary desc
+range between unbounded preceding and unbounded following
+) as lowest_salary from 
+#com )
+select * from cte where e_id = lowest_salary
+
+---
+
+with cte as(
+select * , nth_value(e_id,2) over (partition by d_id order by salary desc
+range between unbounded preceding and unbounded following
+) as nth_value from 
+#com )
+select * from cte 
+
+
+select * from #com
+
+select * , (case when buckets = 1 then 'expensive' 
+when buckets = 2 then 'medium'
+when buckets = 3 then 'cheap' end ) as status from (
+select *,NTILE(3) over(order by salary desc) as buckets
+from #com ) x
+
+---- Recursive CTE
+
+with cte as (
+select 1 as n 
+union all
+select n+1 from cte where n < = 9 )
+select * from cte
+
+create table #man 
+
+select * from #main order by 1;
+
+select x.[id] from 
+(select id,count(*) as 'in' from #main 
+where status  = 'in' group by id,status) x
+inner join (
+select id,count(*) as 'out' from #main 
+where status  = 'out' group by id,status) y
+on x.id = y.id where x.[in] - y.[out] <> 0 
+
+insert into #main values (1,'out')
+
+----
+
+create table #dis
+(vehicle varchar(99),
+day varchar(99),
+t_distance varchar(99))
+
+insert into #dis values ('car','day1',50),('car','day2',100),('car','day3',200),
+('bike','day1',20),('bike','day2',100),('bike','day3',300)
+
+select * from #dis
+
+select vehicle,day,t_distance ,cast(t_distance as int) - cast(pre as int) as actual_distance from (
+select * ,lag(t_distance,1,0) over (partition by vehicle order by day asc) as 'pre' from #dis ) x
+
+
+create table #stu(
+s_id int,
+s_name varchar(99) , class int , subject varchar(99))
+
+insert into #stu values (1,'tom',11,'hindi'),(2,'tom',11,'hindi'),
+(3,'jerry',12,'english'),(4,'jerry',12,'english'),
+(5,'mick',10,'maths'),(6,'mick',10,'maths')
+
+select * from #stu
+
+select *  from (
+select * , row_number() over (partition by s_name order by s_id asc ) as rn from #stu ) 
+x where rn = 1
+
+
+create table #gr 
+( product varchar(99),
+t_count int )
+
+insert into #gr values ('mango',2),('apple',3),('banana',1),('orange',2)
+
+select * from #gr
+
+with cte as (
+select product , t_count , 1 as lvl from #gr g
+union all
+select c.product,c.t_count-1 , lvl + 1 from cte c
+inner join #gr g on g.product = c.product 
+where c.t_count > 1 
+)
+select * from cte order by 1 , 2 desc 
+
+
+
+with cte as (
+select product,t_count from #gr g
+union all
+select c.product,c.t_count-1 from cte c inner join #gr g
+on c.product = g.product where c.t_count > 1)
+select * from cte
+
+
+
+create table #em (
+id int, name varchar(99),m_id int,salary  int )
+
+insert into #em values (1,'ship',5,NULL),(2,'satya',5,100),(3,'jia',5,3000),
+(4,'david',5,4000),(5,'michal',7,3400),(6,'arvind',7,789),(7,'asha',1,890),
+(8,'manyam',1,349),(9,'reshma',8,2000),(10,'akshay',8,3499)
+
+select * from #em
+
+create table #employee (
+e_id int, name varchar(99),d_name varchar(2),salary  int )
+
+insert into #employee values (1,'ship','HR',3000),(2,'satya','DA',100),(3,'jia','DA',3000),
+(4,'david','DE',4000),(5,'michal','HR',3400),(6,'arvind','DE',789),(7,'asha','DA',890),
+(8,'manyam','DS',349),(9,'reshma','HR',2000),(10,'akshay','DS',3499)
+
+--- employee under them
+
+with emp_hire as (
+select id , name,m_id,salary from #em 
+where name = 'asha'
+union all
+select e.* from 
+emp_hire h inner join #em e 
+on h.id = e.m_id)
+select * from emp_hire
+
+--- their manager
+
+with emp_hire as (
+select id , name,m_id,salary from #em 
+where name = 'asha'
+union all
+select e.* from 
+emp_hire h inner join #em e 
+on h.m_id = e.id)
+select * from emp_hire
+
+select *, max(salary) over (partition by m_id order by salary asc
+--range between unbounded preceding and unbounded following
+) as 'max_salary' 
+,min(salary) over (partition by m_id order by salary asc) as 'min_salary'  from #em
+
+select *, max(salary) over (partition by m_id order by salary asc
+range between unbounded preceding and unbounded following
+) as 'max_salary' 
+,min(salary) over (partition by m_id order by salary asc) as 'min_salary'
+,sum(salary) over (partition by m_id order by salary asc
+range between unbounded preceding and unbounded following) as 'total_salary'  from #em
+
+-- dep wise highest salary
+
+select * from #em where id in (
+select distinct(first_value(id) over(partition by m_id order by salary desc)) as 'highest salary'
+from #em) 
+
+with cte as (
+select 2 as n,3 as j 
+union all
+select n+2,j+3 from cte where n<20 and j<30)
+select * from cte 
+
+select * from #em 
+
+
+------------------------------
+
+
+select * from #gr
+with cte as (
+select 1 as int
+union all
+select int+1 from cte 
+where int <=9)
+
+select  int from cte 
+
+select * from #gr;
+
+select * from #employee
+
+select upper(name),lower(name),concat(upper(SUBSTRING(name,1,1)),lower(SUBSTRING(name,2,len(name)-1))) from #employee
+
+use vena_stage 
+go
+
+------------------------------------------------------------------------
+--- ############### Window Function
+
+
+select * from #employee
+
+select d_name,sum(salary) from #employee where d_name =  'DA'
+group by d_name
+
+
+select d_name,sum(salary) as total_salary from #employee 
+group by d_name
+
+select *,sum(salary) over (order by salary desc 
+range between unbounded preceding and unbounded following) as 'grouped_dep_salary'  from #employee 
+
+select * , (salary*100)/grouped_dep_salary  as 'salary_per' from (
+select *,sum(salary) over (order by salary desc 
+range between unbounded preceding and unbounded following) as 'grouped_salary'  from #employee ) x 
+order by 6 desc 
+
+select *,max(salary) over (order by salary desc 
+range between unbounded preceding and unbounded following) as 'max_salary'  from #employee 
+
+select *,max(salary) over (partition by d_name order by salary desc 
+range between unbounded preceding and unbounded following) as 'max_group_salary'  from #employee
+
+select *,sum(salary) over (partition by d_name order by salary desc 
+range between unbounded preceding and unbounded following) as 'sum_group_salary'  from #employee
+
+select *,min(salary) over (partition by d_name order by salary desc 
+range between unbounded preceding and unbounded following) as 'min_group_salary'  from #employee
+
+-------------------------------------------------------------------------------------------------------------
+insert into #employee values (1,'ship','HR',3000),(2,'satya','DA',100),(3,'jia','DA',3000),
+(4,'david','DE',4000),(5,'michal','HR',3400),(6,'arvind','DE',789),(7,'asha','DA',890),
+(8,'manyam','DS',349),(9,'reshma','HR',2000),(10,'akshay','DS',3499)
+
+
+--- How to remove duplicte from table
+
+select * from #employee
+
+---- 1. Using row_number() 
+
+with cte as  (
+select * ,row_number() over (partition by e_id order by salary ) as rn from #employee ) 
+delete from cte where rn > 1 
+
+
+select * , row_number() over (partition by d_name order by salary) as rn from #employee
+
+---
+select * , row_number() over (order by salary desc ) as rn ,
+dense_rank() over (order by salary desc) as desne_rank ,
+rank() over (order by salary desc) as rnak 
+from #employee
+
+--- OVERALL 
+select * from (
+select * ,dense_rank() over (order by salary desc) as desne_rank 
+from #employee ) x
+where desne_rank = 1
+
+--DEP_WISE
+
+select * from (
+select * ,dense_rank() over (partition by d_name order by salary desc) as desne_rank 
+from #employee ) x
+where desne_rank = 1
+
+select * from #employee where salary in (
+select max(salary) from #employee ) 
+
+--- lag
+
+select * , lag(salary,2,0) over (order by salary desc)  as lag from #employee
+
+-- lead
+
+select * , lead(salary,2,0) over (order by salary desc)  as lag from #employee
+
+
+---
+select * from #dis
+
+select *, lag(t_distance,1,0) over (partition by vehicleorder by vehicle,day asc) as pre from #dis 
+
